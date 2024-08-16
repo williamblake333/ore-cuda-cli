@@ -1,0 +1,28 @@
+[package]
+name = "drillx-program"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+keywords.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "program"
+
+[features]
+no-entrypoint = []
+default = []
+
+[dependencies]
+bytemuck = { workspace = true }
+drillx = { path = "../drillx", features = ["solana"] }
+solana-program = { workspace = true }
+
+[dev-dependencies]
+solana-program-test = { workspace = true }
+solana-sdk = { workspace = true }
+tokio = { workspace = true }

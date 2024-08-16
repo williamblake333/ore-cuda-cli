@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = ["drillx", "examples/*", "program"]
+
+[workspace.package]
+version = "2.0.0"
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://ore.supply"
+documentation = "https://ore.supply"
+repository = "https://github.com/regolith-labs/ore"
+readme = "./README.md"
+keywords = ["solana", "crypto", "mining"]
+
+[workspace.dependencies]
+sha3 = "0.10.8"
+bytemuck = { version = "1.16", features = ["derive"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+equix = "0.1.6"
+serde = { version = "1.0", features = ["derive"] }
+solana-program = "^2.0.4"
+solana-program-test = "^2.0.4"
+solana-sdk = "^2.0.4"
+strum = { version = "0.26.3", features = ["derive"] }
+tokio = { version = "1.39.2", features = ["full"] }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+
+[profile.bench]
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+
+[patch.crates-io]
+equix = { path = "../arti/crates/equix" }
