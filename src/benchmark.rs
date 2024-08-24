@@ -4,7 +4,7 @@ use solana_rpc_client::spinner;
 
 use crate::{args::BenchmarkArgs, Miner};
 
-const TEST_DURATION: i64 = 30;
+const TEST_DURATION: i8 = 30;
 
 impl Miner {
     pub async fn benchmark(&self, args: BenchmarkArgs) {
@@ -33,7 +33,7 @@ impl Miner {
                             nonce += 1;
 
                             // Exit if time has elapsed
-                            if (timer.elapsed().as_secs() as i64).ge(&TEST_DURATION) {
+                            if (timer.elapsed().as_secs() as i8).ge(&TEST_DURATION) {
                                 break;
                             }
                         }

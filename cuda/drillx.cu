@@ -1,15 +1,16 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <vector>
 #include "drillx.h"
-#include "equix.h"
-#include "hashx.h"
+#include "equix/include/equix.h"
+#include "hashx/include/hashx.h"
 #include "equix/src/context.h"
 #include "equix/src/solver.h"
 #include "equix/src/solver_heap.h"
 #include "hashx/src/context.h"
 
-const int BATCH_SIZE = 8192; 
-const int NUM_HASHING_ROUNDS = 1; 
+const int BATCH_SIZE = 8192;
+const int NUM_HASHING_ROUNDS = 1;
 
 #define CUDA_CHECK(call) \
     do { \
@@ -21,31 +22,35 @@ const int NUM_HASHING_ROUNDS = 1;
     } while (0)
 
 extern "C" void set_num_hashing_rounds(int rounds) {
-    CUDA_CHECK(cudaMemcpyToSymbol(NUM_HASHING_ROUNDS, &rounds, sizeof(int)));
+    // Enforce a minimum of 1 hashing round
+    int adjustedRounds = (rounds > 0) ? rounds : 1;
+    CUDA_CHECK(cudaMemcpyToSymbol(NUM_HASHING_ROUNDS, &adjustedRounds, sizeof(int)));
 }
 
 extern "C" void hash(uint8_t *challenge, uint8_t *nonce, uint64_t *out) {
     MemoryPool memPool(BATCH_SIZE);
 
-    uint8_t seed[40];
-    memcpy(seed, challenge, 32);
+    std::vector<uint8_t> seed(40);
+    memcpy(seed.data(), challenge, 32);
 
     for (int i = 0; i < BATCH_SIZE; i++) {
         uint64_t nonce_offset = *((uint64_t*)nonce) + i;
-        memcpy(seed + 32, &nonce_offset, 8);
+        memcpy(seed.data() + 32, &nonce_offset, 8);
         memPool.ctxs[i] = hashx_alloc(HASHX_INTERPRETED);
-        if (!memPool.ctxs[i] || !hashx_make(memPool.ctxs[i], seed, 40)) {
-            return;
+        if (!memPool.ctxs[i] || !hashx_make(memPool.ctxs[i], seed.data(), 40)) {
+            return;  // Handle errors properly
         }
     }
 
-    int threadsPerBlock = 1024;  // Increased number of threads per block
+    int threadsPerBlock = 1024;
     int blocksPerGrid = (BATCH_SIZE * INDEX_SPACE + threadsPerBlock - 1) / threadsPerBlock;
 
     cudaStream_t stream;
     CUDA_CHECK(cudaStreamCreate(&stream));
 
-    do_hash_stage0i<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(memPool.ctxs, memPool.hash_space, NUM_HASHING_ROUNDS);
+    // Ensure at least one round is performed for valid hashing
+    int rounds_to_execute = (NUM_HASHING_ROUNDS > 0) ? NUM_HASHING_ROUNDS : 1;
+    do_hash_stage0i<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(memPool.ctxs, memPool.hash_space, rounds_to_execute);
     CUDA_CHECK(cudaGetLastError());
 
     CUDA_CHECK(cudaStreamSynchronize(stream));
@@ -88,7 +93,7 @@ extern "C" void solve_all_stages(uint64_t *hashes, uint8_t *out, uint32_t *sols,
 
     CUDA_CHECK(cudaMemcpy(d_hashes, hashes, num_sets * INDEX_SPACE * sizeof(uint64_t), cudaMemcpyHostToDevice));
 
-    int threadsPerBlock = 1024; 
+    int threadsPerBlock = 1024;
     int blocksPerGrid = (num_sets + threadsPerBlock - 1) / threadsPerBlock;
 
     solve_all_stages_kernel<<<blocksPerGrid, threadsPerBlock>>>(d_hashes, d_heaps, d_solutions, d_num_sols);

@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::{io::Read, time::Duration};
 
 use cached::proc_macro::cached;
 use ore_api::{
@@ -8,10 +8,15 @@ use ore_api::{
     state::{Config, Proof, Treasury},
 };
 use ore_utils::AccountDeserialize;
+use solana_client::client_error::{ClientError, ClientErrorKind};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::{pubkey::Pubkey, sysvar};
-use solana_sdk::clock::Clock;
+use solana_sdk::{clock::Clock, hash::Hash};
 use spl_associated_token_account::get_associated_token_address;
+use tokio::time::sleep;
+
+pub const BLOCKHASH_QUERY_RETRIES: usize = 5;
+pub const BLOCKHASH_QUERY_DELAY: u64 = 50;
 
 pub async fn _get_treasury(client: &RpcClient) -> Treasury {
     let data = client
@@ -34,19 +39,33 @@ pub async fn get_proof_with_authority(client: &RpcClient, authority: Pubkey) -> 
     get_proof(client, proof_address).await
 }
 
+pub async fn get_updated_proof_with_authority(
+    client: &RpcClient,
+    authority: Pubkey,
+    lash_hash_at: i64,
+) -> Proof {
+    loop {
+        let proof = get_proof_with_authority(client, authority).await;
+        if proof.last_hash_at.gt(&lash_hash_at) {
+            return proof;
+        }
+        tokio::time::sleep(Duration::from_millis(1_000)).await;
+    }
+}
+
 pub async fn get_proof(client: &RpcClient, address: Pubkey) -> Proof {
     let data = client
         .get_account_data(&address)
         .await
-        .expect("Failed to get miner account");
-    *Proof::try_from_bytes(&data).expect("Failed to parse miner account")
+        .expect("Failed to get proof account");
+    *Proof::try_from_bytes(&data).expect("Failed to parse proof account")
 }
 
 pub async fn get_clock(client: &RpcClient) -> Clock {
     let data = client
         .get_account_data(&sysvar::clock::ID)
         .await
-        .expect("Failed to get miner account");
+        .expect("Failed to get clock account");
     bincode::deserialize::<Clock>(&data).expect("Failed to deserialize clock")
 }
 
@@ -75,6 +94,33 @@ pub fn ask_confirm(question: &str) -> bool {
             'y' | 'Y' => return true,
             'n' | 'N' => return false,
             _ => println!("y/n only please."),
+        }
+    }
+}
+
+pub async fn get_latest_blockhash_with_retries(
+    client: &RpcClient,
+) -> Result<(Hash, u64), ClientError> {
+    let mut attempts = 0;
+
+    loop {
+        if let Ok((hash, slot)) = client
+            .get_latest_blockhash_with_commitment(client.commitment())
+            .await
+        {
+            return Ok((hash, slot));
+        }
+
+        // Retry
+        sleep(Duration::from_millis(BLOCKHASH_QUERY_DELAY)).await;
+        attempts += 1;
+        if attempts >= BLOCKHASH_QUERY_RETRIES {
+            return Err(ClientError {
+                request: None,
+                kind: ClientErrorKind::Custom(
+                    "Max retries reached for latest blockhash query".into(),
+                ),
+            });
         }
     }
 }

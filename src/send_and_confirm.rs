@@ -105,7 +105,7 @@ impl Miner {
 
                     // Confirm the tx landed
                     for _ in 0..CONFIRM_RETRIES {
-                        std::thread::sleep(Duration::from_millis(CONFIRM_DELAY));
+                        tokio::time::sleep(Duration::from_millis(CONFIRM_DELAY)).await;
                         match client.get_signature_statuses(&[sig]).await {
                             Ok(signature_statuses) => {
                                 for status in signature_statuses.value {
@@ -162,7 +162,7 @@ impl Miner {
             }
 
             // Retry
-            std::thread::sleep(Duration::from_millis(GATEWAY_DELAY));
+            tokio::time::sleep(Duration::from_millis(GATEWAY_DELAY)).await;
             attempts += 1;
             if attempts > GATEWAY_RETRIES {
                 progress_bar.finish_with_message(format!("{}: Max retries", "ERROR".bold().red()));
@@ -176,58 +176,5 @@ impl Miner {
 
     // TODO
     fn _simulate(&self) {
-
-        // Simulate tx
-        // let mut sim_attempts = 0;
-        // 'simulate: loop {
-        //     let sim_res = client
-        //         .simulate_transaction_with_config(
-        //             &tx,
-        //             RpcSimulateTransactionConfig {
-        //                 sig_verify: false,
-        //                 replace_recent_blockhash: true,
-        //                 commitment: Some(self.rpc_client.commitment()),
-        //                 encoding: Some(UiTransactionEncoding::Base64),
-        //                 accounts: None,
-        //                 min_context_slot: Some(slot),
-        //                 inner_instructions: false,
-        //             },
-        //         )
-        //         .await;
-        //     match sim_res {
-        //         Ok(sim_res) => {
-        //             if let Some(err) = sim_res.value.err {
-        //                 println!("Simulaton error: {:?}", err);
-        //                 sim_attempts += 1;
-        //             } else if let Some(units_consumed) = sim_res.value.units_consumed {
-        //                 if dynamic_cus {
-        //                     println!("Dynamic CUs: {:?}", units_consumed);
-        //                     let cu_budget_ix = ComputeBudgetInstruction::set_compute_unit_limit(
-        //                         units_consumed as u32 + 1000,
-        //                     );
-        //                     let cu_price_ix =
-        //                         ComputeBudgetInstruction::set_compute_unit_price(self.priority_fee);
-        //                     let mut final_ixs = vec![];
-        //                     final_ixs.extend_from_slice(&[cu_budget_ix, cu_price_ix]);
-        //                     final_ixs.extend_from_slice(ixs);
-        //                     tx = Transaction::new_with_payer(&final_ixs, Some(&signer.pubkey()));
-        //                 }
-        //                 break 'simulate;
-        //             }
-        //         }
-        //         Err(err) => {
-        //             println!("Simulaton error: {:?}", err);
-        //             sim_attempts += 1;
-        //         }
-        //     }
-
-        //     // Abort if sim fails
-        //     if sim_attempts.gt(&SIMULATION_RETRIES) {
-        //         return Err(ClientError {
-        //             request: None,
-        //             kind: ClientErrorKind::Custom("Simulation failed".into()),
-        //         });
-        //     }
-        // }
     }
 }

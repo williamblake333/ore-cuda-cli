@@ -1,42 +1,9 @@
-/* Copyright (c) 2020 tevador <tevador@gmail.com> */
-/* See LICENSE for licensing information */
-
-/*
- * HashX is an algorithm designed for client puzzles and proof-of-work schemes.
- * While traditional cryptographic hash functions use a fixed one-way
- * compression function, each HashX instance represents a unique pseudorandomly
- * generated one-way function.
- *
- * Example of usage:
- *
-    #include <hashx.h>
-    #include <stdio.h>
-
-    int main() {
-        char seed[] = "this is a seed that will generate a hash function";
-        char hash[HASHX_SIZE];
-        hashx_ctx* ctx = hashx_alloc(HASHX_COMPILED);
-        if (ctx == HASHX_NOTSUPP)
-            ctx = hashx_alloc(HASHX_INTERPRETED);
-        if (ctx == NULL)
-            return 1;
-        if (!hashx_make(ctx, seed, sizeof(seed)))
-            return 1;
-        hashx_exec(ctx, 123456789, hash);
-        hashx_free(ctx);
-        for (unsigned i = 0; i < HASHX_SIZE; ++i)
-            printf("%02x", hash[i] & 0xff);
-        printf("\n");
-        return 0;
-    }
- *
- */
-
 #ifndef HASHX_H
 #define HASHX_H
 
 #include <stdint.h>
 #include <stddef.h>
+#include <cuda_runtime.h>  // Ensure CUDA is included
 
 /*
  * Input of the hash function.
@@ -56,7 +23,7 @@
 #endif
 
 /* Opaque struct representing a HashX instance */
-typedef struct hashx_ctx hashx_ctx;
+typedef struct __attribute__((aligned(64))) hashx_ctx hashx_ctx;
 
 /* Type of hash function */
 typedef enum hashx_type {
@@ -87,7 +54,7 @@ extern "C" {
  * @return pointer to a new HashX instance. Returns NULL on memory allocation 
  *         failure and HASHX_NOTSUPP if the requested type is not supported.
 */
-HASHX_API hashx_ctx* hashx_alloc(hashx_type type);
+__host__ HASHX_API hashx_ctx* hashx_alloc(hashx_type type);
 
 /*
  * Create a new HashX function from seed.
@@ -98,7 +65,7 @@ HASHX_API hashx_ctx* hashx_alloc(hashx_type type);
  *
  * @return 1 on success, 0 on failure.                                         
 */
-HASHX_API int hashx_make(hashx_ctx* ctx, const void* seed, size_t size);
+__host__ HASHX_API int hashx_make(hashx_ctx* __restrict__ ctx, const void* __restrict__ seed, size_t size);
 
 /*
  * Execute the HashX function.
@@ -108,15 +75,15 @@ HASHX_API int hashx_make(hashx_ctx* ctx, const void* seed, size_t size);
  * @param HASHX_INPUT is the input to be hashed (see definition above).
  * @param output is a pointer to the result buffer. HASHX_SIZE bytes will be
  *        written.
- s*/
-__device__ HASHX_API void hashx_exec(const hashx_ctx* ctx, HASHX_INPUT, void* output);
+ */
+__device__ HASHX_API void hashx_exec(const hashx_ctx* __restrict__ ctx, HASHX_INPUT, void* __restrict__ output);
 
 /*
  * Free a HashX instance.
  *
  * @param ctx is pointer to a HashX instance.
 */
-HASHX_API void hashx_free(hashx_ctx* ctx);
+__host__ HASHX_API void hashx_free(hashx_ctx* ctx);
 
 #ifdef __cplusplus
 }
